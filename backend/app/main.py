@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.projects import router as project_router
 from app.api.agents import router as agent_router
+from app.api.execution import router as execution_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -22,6 +23,7 @@ app.add_middleware(
 
 app.include_router(project_router)
 app.include_router(agent_router)
+app.include_router(execution_router)
 
 
 @app.get("/")

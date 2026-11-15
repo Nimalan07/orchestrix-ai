@@ -80,6 +80,34 @@ class LLMService:
             data = response.json()
             return data.get("response", "").strip()
 
+    async def generate_json(
+        self,
+        user_prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.1,
+    ) -> Dict[str, Any]:
+        """Generate arbitrary JSON object with Ollama json format mode and resilient cleaning."""
+        payload: Dict[str, Any] = {
+            "model": self.model_name,
+            "prompt": user_prompt,
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": temperature},
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=15.0)) as client:
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+            )
+            response.raise_for_status()
+            raw_output = response.json().get("response", "")
+
+        cleaned_json = self._clean_json_string(raw_output)
+        return json.loads(cleaned_json)
+
     async def generate_structured(
         self,
         prompt: str,

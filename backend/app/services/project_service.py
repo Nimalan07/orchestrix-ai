@@ -21,6 +21,9 @@ def get_project(db: Session, project_id: str) -> Project | None:
     return db.scalar(statement)
 
 
+get_project_by_id = get_project
+
+
 def get_all_projects(db: Session, limit: int = 20, offset: int = 0) -> list[Project]:
     statement = (
         select(Project)

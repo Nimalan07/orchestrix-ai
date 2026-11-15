@@ -17,6 +17,7 @@ from app.schemas.task import TaskResponse
 from app.agents.database_engineer import database_engineer_agent
 from app.agents.backend_developer import backend_developer_agent
 from app.agents.frontend_developer import frontend_developer_agent
+from app.orchestrator.scaffolding import scaffolding_generator
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,33 @@ class CodeGenerationOrchestrator:
 
                 update_task_status(db, task.id, "completed")
 
+            # Synthesize runtime scaffolding (requirements, main.py, session.py, package.json, Dockerfiles, docker-compose)
+            current_files = [f["relative_path"] for f in workspace_service.list_files(project.name)]
+            api_routers = [f for f in current_files if "backend/app/api/" in f and f.endswith(".py")]
+            scaffold_files = scaffolding_generator.generate_scaffolding(
+                project_name=project.name,
+                architecture=architecture,
+                discovered_api_routers=api_routers,
+            )
+            for rel_path, content in scaffold_files.items():
+                # Avoid overwriting already custom-generated user files unless they don't exist
+                # But ensure foundational runtime configs exist
+                if not (workspace_dir / rel_path).exists():
+                    meta = workspace_service.write_file(
+                        project_slug=project.name,
+                        relative_path=rel_path,
+                        content=content,
+                        overwrite=True,
+                    )
+                    save_file_artifact(
+                        db=db,
+                        project_id=project.id,
+                        file_path=meta["relative_path"],
+                        file_hash=meta["sha256"],
+                        agent="scaffolding",
+                    )
+                    generated_artifacts_meta.append(meta)
+
             # Generate project README.md and manifest in the generated project
             readme_content = self._build_project_readme(project, architecture, tasks)
             readme_meta = workspace_service.write_file(
@@ -178,6 +206,65 @@ class CodeGenerationOrchestrator:
             logger.error(f"Code generation failed: {exc}", exc_info=True)
             update_project(db, project, ProjectUpdate(status="failed"))
             raise exc
+
+    def ensure_project_scaffolding(
+        self,
+        db: Session,
+        project: Project,
+    ) -> List[Dict[str, Any]]:
+        """
+        Synthesizes any missing runtime scaffolding files for an existing project workspace.
+        Returns list of newly created artifact metadata dicts.
+        """
+        arch_record = get_architecture_by_project_id(db, project.id)
+        architecture = (
+            SystemArchitecture.model_validate(arch_record.specification)
+            if arch_record
+            else SystemArchitecture.model_validate({
+                "project_name": project.name,
+                "architecture_pattern": "layered",
+                "tech_stack": {
+                    "backend": "FastAPI",
+                    "frontend": "Next.js",
+                    "database": "PostgreSQL",
+                    "orm": "SQLAlchemy",
+                    "authentication": "JWT",
+                },
+                "components": [],
+                "entities": [],
+                "api_contracts": [],
+                "architectural_decisions": [],
+            })
+        )
+        workspace_dir = workspace_service.get_workspace_dir(project.name)
+        current_files = [f["relative_path"] for f in workspace_service.list_files(project.name)]
+        api_routers = [f for f in current_files if "backend/app/api/" in f and f.endswith(".py")]
+
+        scaffold_files = scaffolding_generator.generate_scaffolding(
+            project_name=project.name,
+            architecture=architecture,
+            discovered_api_routers=api_routers,
+        )
+
+        created_meta = []
+        for rel_path, content in scaffold_files.items():
+            if not (workspace_dir / rel_path).exists():
+                meta = workspace_service.write_file(
+                    project_slug=project.name,
+                    relative_path=rel_path,
+                    content=content,
+                    overwrite=True,
+                )
+                save_file_artifact(
+                    db=db,
+                    project_id=project.id,
+                    file_path=meta["relative_path"],
+                    file_hash=meta["sha256"],
+                    agent="scaffolding",
+                )
+                created_meta.append(meta)
+
+        return created_meta
 
     def _build_project_readme(
         self,
