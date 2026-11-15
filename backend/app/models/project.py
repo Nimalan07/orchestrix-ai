@@ -47,6 +47,18 @@ class Project(Base):
         uselist=False,
         cascade="all, delete-orphan"
     )
+    architecture = relationship(
+        "Architecture",
+        back_populates="project",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+    tasks = relationship(
+        "Task",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="Task.execution_order"
+    )
 
     __table_args__ = (
         Index("ix_projects_created_at", "created_at"),

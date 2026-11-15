@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import (
     APIRouter, Depends, HTTPException, Query, Response, status, Body
 )
@@ -11,6 +11,14 @@ from app.schemas.requirement import (
     RequirementSpecification,
     RequirementAnalysisResponse,
 )
+from app.schemas.architecture import (
+    SystemArchitecture,
+    ArchitectureResponse,
+)
+from app.schemas.task import (
+    TaskResponse,
+    TaskPlan,
+)
 from app.services.project_service import (
     create_project as create_project_service,
     get_project,
@@ -22,7 +30,18 @@ from app.services.requirement_service import (
     get_requirement_by_project_id,
     save_requirement,
 )
+from app.services.architecture_service import (
+    get_architecture_by_project_id,
+    save_architecture,
+)
+from app.services.task_service import (
+    get_tasks_by_project_id,
+    save_task_plan,
+    build_task_plan_response,
+)
 from app.agents.requirement_analyzer import requirement_analyzer_agent
+from app.agents.architect import architect_agent
+from app.agents.planner import planner_agent
 
 router = APIRouter(
     prefix="/api/projects",
@@ -112,7 +131,7 @@ def remove_project(
     return Response(status_code=204)
 
 
-# ANALYZE REQUIREMENTS (AI Agent)
+# ANALYZE REQUIREMENTS (Requirement Analyzer Agent)
 @router.post(
     "/{project_id}/analyze",
     response_model=RequirementAnalysisResponse,
@@ -147,12 +166,12 @@ async def analyze_project_requirements(
         # Save requirement specification in database
         save_requirement(db, project.id, specification)
 
-        # Update status to planning (ready for planner & architect)
-        update_project(db, project, ProjectUpdate(status="planning"))
+        # Update status to analyzed
+        update_project(db, project, ProjectUpdate(status="analyzed"))
 
         return RequirementAnalysisResponse(
             project_id=project.id,
-            status="planning",
+            status="analyzed",
             specification=specification
         )
     except Exception as exc:
@@ -187,3 +206,188 @@ def get_project_requirements(
         )
 
     return RequirementSpecification.model_validate(req.specification)
+
+
+# ARCHITECT SYSTEM (Architect Agent)
+@router.post(
+    "/{project_id}/architect",
+    response_model=ArchitectureResponse,
+    status_code=status.HTTP_200_OK
+)
+async def architect_project_system(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    req_record = get_requirement_by_project_id(db, project_id)
+    if req_record is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Project requirements must be analyzed before architecting the system."
+        )
+
+    requirements = RequirementSpecification.model_validate(req_record.specification)
+
+    # Transition status to architecting
+    update_project(db, project, ProjectUpdate(status="architecting"))
+
+    try:
+        architecture = await architect_agent.design(
+            project_name=project.name,
+            requirements=requirements,
+        )
+
+        # Save architecture in database
+        save_architecture(db, project.id, architecture)
+
+        # Update status to architected
+        update_project(db, project, ProjectUpdate(status="architected"))
+
+        return ArchitectureResponse(
+            project_id=project.id,
+            status="architected",
+            architecture=architecture
+        )
+    except Exception as exc:
+        update_project(db, project, ProjectUpdate(status="failed"))
+        raise HTTPException(
+            status_code=500,
+            detail=f"System architecture generation failed: {str(exc)}"
+        )
+
+
+# GET PROJECT ARCHITECTURE
+@router.get(
+    "/{project_id}/architecture",
+    response_model=SystemArchitecture
+)
+def get_project_architecture(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    arch = get_architecture_by_project_id(db, project_id)
+    if arch is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Architecture has not been generated yet for this project"
+        )
+
+    return SystemArchitecture.model_validate(arch.specification)
+
+
+# PLAN TASKS (Planner Agent + DAG Engine)
+@router.post(
+    "/{project_id}/plan",
+    response_model=TaskPlan,
+    status_code=status.HTTP_200_OK
+)
+async def plan_project_tasks(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    req_record = get_requirement_by_project_id(db, project_id)
+    if req_record is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Requirements must be analyzed before planning."
+        )
+
+    arch_record = get_architecture_by_project_id(db, project_id)
+    if arch_record is None:
+        raise HTTPException(
+            status_code=400,
+            detail="System architecture must be generated before planning tasks."
+        )
+
+    requirements = RequirementSpecification.model_validate(req_record.specification)
+    architecture = SystemArchitecture.model_validate(arch_record.specification)
+
+    # Transition status to planning
+    update_project(db, project, ProjectUpdate(status="planning"))
+
+    try:
+        ordered_tasks, parallel_batches = await planner_agent.plan(
+            project_name=project.name,
+            requirements=requirements,
+            architecture=architecture,
+        )
+
+        # Persist tasks in database
+        saved_tasks = save_task_plan(db, project.id, ordered_tasks)
+
+        # Transition status to planned
+        update_project(db, project, ProjectUpdate(status="planned"))
+
+        return build_task_plan_response(project.id, saved_tasks)
+    except Exception as exc:
+        update_project(db, project, ProjectUpdate(status="failed"))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Task planning and DAG verification failed: {str(exc)}"
+        )
+
+
+# GET TASKS LIST
+@router.get(
+    "/{project_id}/tasks",
+    response_model=List[TaskResponse]
+)
+def list_project_tasks(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    tasks = get_tasks_by_project_id(db, project_id)
+    return [TaskResponse.model_validate(t) for t in tasks]
+
+
+# GET TASK DAG / BATCHES
+@router.get(
+    "/{project_id}/tasks/dag",
+    response_model=TaskPlan
+)
+def get_project_task_dag(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    tasks = get_tasks_by_project_id(db, project_id)
+    if not tasks:
+        raise HTTPException(
+            status_code=404,
+            detail="No tasks planned yet for this project"
+        )
+
+    return build_task_plan_response(project.id, tasks)

@@ -6,6 +6,8 @@ from app.database.session import Base
 # Import models so Alembic can discover them
 from app.models.project import Project
 from app.models.requirement import Requirement
+from app.models.architecture import Architecture
+from app.models.task import Task
 
 config = context.config
 

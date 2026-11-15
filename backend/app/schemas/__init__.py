@@ -10,6 +10,23 @@ from app.schemas.requirement import (
     RequirementAnalysisRequest,
     RequirementAnalysisResponse,
 )
+from app.schemas.architecture import (
+    SystemArchitecture,
+    TechStack,
+    APIContract,
+    DataEntity,
+    EntityField,
+    ArchitecturalDecision,
+    ArchitectureResponse,
+)
+from app.schemas.task import (
+    TaskBase,
+    TaskCreate,
+    TaskUpdate,
+    TaskResponse,
+    TaskPlan,
+    TaskPlanLLMOutput,
+)
 
 __all__ = [
     "ProjectCreate",
@@ -24,4 +41,17 @@ __all__ = [
     "AcceptanceCriterion",
     "RequirementAnalysisRequest",
     "RequirementAnalysisResponse",
+    "SystemArchitecture",
+    "TechStack",
+    "APIContract",
+    "DataEntity",
+    "EntityField",
+    "ArchitecturalDecision",
+    "ArchitectureResponse",
+    "TaskBase",
+    "TaskCreate",
+    "TaskUpdate",
+    "TaskResponse",
+    "TaskPlan",
+    "TaskPlanLLMOutput",
 ]

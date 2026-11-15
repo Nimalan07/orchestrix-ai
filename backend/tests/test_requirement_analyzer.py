@@ -178,7 +178,7 @@ def test_project_analyze_with_mocked_llm(client, mock_spec):
         analyze_res = client.post(f"/api/projects/{project_id}/analyze")
         assert analyze_res.status_code == 200
         analysis_data = analyze_res.json()
-        assert analysis_data["status"] == "planning"
+        assert analysis_data["status"] == "analyzed"
         assert analysis_data["specification"]["project_name"] == "Student Portal"
         assert len(analysis_data["specification"]["functional_requirements"]) == 2
 
@@ -189,10 +189,10 @@ def test_project_analyze_with_mocked_llm(client, mock_spec):
     assert saved_spec["project_name"] == "Student Portal"
     assert len(saved_spec["user_roles"]) == 2
 
-    # Verify project status in projects table is updated to planning
+    # Verify project status in projects table is updated to analyzed
     proj_res = client.get(f"/api/projects/{project_id}")
     assert proj_res.status_code == 200
-    assert proj_res.json()["status"] == "planning"
+    assert proj_res.json()["status"] == "analyzed"
 
 
 def test_analyze_nonexistent_project(client):
