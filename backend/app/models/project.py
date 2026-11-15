@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import (
     String, Text, DateTime, func, Index
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.session import Base
 
 
@@ -38,6 +38,14 @@ class Project(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False
+    )
+
+    # Relationships
+    requirement = relationship(
+        "Requirement",
+        back_populates="project",
+        uselist=False,
+        cascade="all, delete-orphan"
     )
 
     __table_args__ = (

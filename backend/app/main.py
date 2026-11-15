@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.projects import router as project_router
+from app.api.agents import router as agent_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(project_router)
+app.include_router(agent_router)
 
 
 @app.get("/")
@@ -37,6 +39,7 @@ async def health():
     return {
         "status": "healthy",
         "service": f"{settings.APP_NAME} API",
-        "environment": "development",
-        "ai_provider": "ollama"
+        "environment": settings.ENVIRONMENT,
+        "ai_provider": "ollama",
+        "model": settings.OLLAMA_MODEL
     }

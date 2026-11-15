@@ -14,6 +14,7 @@ class ProjectUpdate(BaseModel):
     status: Literal[
         "created",
         "analyzing",
+        "analyzed",
         "planning",
         "generating",
         "testing",

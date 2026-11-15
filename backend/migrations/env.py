@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.database.session import Base
 # Import models so Alembic can discover them
 from app.models.project import Project
+from app.models.requirement import Requirement
 
 config = context.config
 

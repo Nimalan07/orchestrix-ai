@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Orchestrix"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
+    ENVIRONMENT: str = "development"
     DATABASE_URL: str = "postgresql+psycopg://postgres:indiawin@localhost:5432/orchestrix_db"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5-coder:7b"
