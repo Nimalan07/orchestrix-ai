@@ -1,4 +1,6 @@
 from typing import Optional, List
+from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import (
     APIRouter, Depends, HTTPException, Query, Response, status, Body
 )
@@ -18,6 +20,10 @@ from app.schemas.architecture import (
 from app.schemas.task import (
     TaskResponse,
     TaskPlan,
+)
+from app.schemas.code import (
+    GenerationManifest,
+    FileArtifactResponse,
 )
 from app.services.project_service import (
     create_project as create_project_service,
@@ -39,9 +45,12 @@ from app.services.task_service import (
     save_task_plan,
     build_task_plan_response,
 )
+from app.services.artifact_service import get_artifacts_by_project_id
+from app.services.workspace_service import workspace_service, SecurityError
 from app.agents.requirement_analyzer import requirement_analyzer_agent
 from app.agents.architect import architect_agent
 from app.agents.planner import planner_agent
+from app.orchestrator.code_orchestrator import code_generation_orchestrator
 
 router = APIRouter(
     prefix="/api/projects",
@@ -391,3 +400,127 @@ def get_project_task_dag(
         )
 
     return build_task_plan_response(project.id, tasks)
+
+
+# GENERATE CODE (Multi-Agent Code Generation Orchestrator)
+@router.post(
+    "/{project_id}/generate",
+    response_model=GenerationManifest,
+    status_code=status.HTTP_200_OK
+)
+async def generate_project_code(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    tasks = get_tasks_by_project_id(db, project_id)
+    if not tasks:
+        raise HTTPException(
+            status_code=400,
+            detail="Tasks must be planned before code generation."
+        )
+
+    arch_record = get_architecture_by_project_id(db, project_id)
+    if not arch_record:
+        raise HTTPException(
+            status_code=400,
+            detail="Architecture must be generated before code generation."
+        )
+
+    try:
+        manifest = await code_generation_orchestrator.generate_project(
+            db=db,
+            project=project,
+        )
+        return manifest
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Code generation orchestrator failed: {str(exc)}"
+        )
+
+
+# LIST GENERATED FILES
+@router.get(
+    "/{project_id}/files",
+    response_model=List[FileArtifactResponse]
+)
+def list_project_files(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    artifacts = get_artifacts_by_project_id(db, project_id)
+    return [FileArtifactResponse.model_validate(a) for a in artifacts]
+
+
+# GET FILE CONTENT
+@router.get(
+    "/{project_id}/files/content",
+    response_class=Response
+)
+def read_project_file_content(
+    project_id: str,
+    file_path: str = Query(..., description="Relative file path, e.g. README.md"),
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    try:
+        content = workspace_service.read_file(project.name, file_path)
+        return Response(content=content, media_type="text/plain")
+    except SecurityError as sec_err:
+        raise HTTPException(status_code=403, detail=str(sec_err))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"File not found: '{file_path}'")
+
+
+# GET MANIFEST
+@router.get(
+    "/{project_id}/manifest",
+    response_model=GenerationManifest
+)
+def get_project_manifest(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    workspace_dir = workspace_service.get_workspace_dir(project.name)
+    files = workspace_service.list_files(project.name)
+    if not files:
+        raise HTTPException(
+            status_code=404,
+            detail="No files generated yet for this project"
+        )
+
+    return GenerationManifest(
+        project_id=project.id,
+        project_name=project.name,
+        workspace_directory=str(workspace_dir),
+        total_files=len(files),
+        files=files,
+        generated_at=datetime.now(timezone.utc),
+    )

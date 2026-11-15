@@ -27,6 +27,12 @@ from app.schemas.task import (
     TaskPlan,
     TaskPlanLLMOutput,
 )
+from app.schemas.code import (
+    GeneratedFile,
+    TaskCodeOutput,
+    FileArtifactResponse,
+    GenerationManifest,
+)
 
 __all__ = [
     "ProjectCreate",
@@ -54,4 +60,8 @@ __all__ = [
     "TaskResponse",
     "TaskPlan",
     "TaskPlanLLMOutput",
+    "GeneratedFile",
+    "TaskCodeOutput",
+    "FileArtifactResponse",
+    "GenerationManifest",
 ]

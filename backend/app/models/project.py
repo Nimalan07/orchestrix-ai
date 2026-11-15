@@ -59,6 +59,11 @@ class Project(Base):
         cascade="all, delete-orphan",
         order_by="Task.execution_order"
     )
+    artifacts = relationship(
+        "FileArtifact",
+        back_populates="project",
+        cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_projects_created_at", "created_at"),

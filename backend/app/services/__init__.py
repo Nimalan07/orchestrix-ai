@@ -19,6 +19,16 @@ from app.services.task_service import (
     update_task_status,
     build_task_plan_response,
 )
+from app.services.workspace_service import (
+    WorkspaceService,
+    workspace_service,
+    SecurityError,
+)
+from app.services.artifact_service import (
+    get_artifacts_by_project_id,
+    get_artifact_by_path,
+    save_file_artifact,
+)
 from app.services.llm_service import LLMService, llm_service
 
 __all__ = [
@@ -35,6 +45,12 @@ __all__ = [
     "save_task_plan",
     "update_task_status",
     "build_task_plan_response",
+    "WorkspaceService",
+    "workspace_service",
+    "SecurityError",
+    "get_artifacts_by_project_id",
+    "get_artifact_by_path",
+    "save_file_artifact",
     "LLMService",
     "llm_service",
 ]
