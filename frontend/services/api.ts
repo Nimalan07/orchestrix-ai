@@ -8,7 +8,7 @@ export const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 120000, // 2 minutes for agent inference and code generation
+  timeout: 360000, // 6 minutes for agent inference and code generation on local LLMs
 });
 
 // Response interceptor for clear debugging
