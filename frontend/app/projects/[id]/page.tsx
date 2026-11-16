@@ -365,17 +365,17 @@ export default function ProjectWorkspacePage() {
                       Project Overview
                     </h3>
                     <p className="text-sm text-grey-800 font-light leading-relaxed">
-                      {requirements.project_overview}
+                      {requirements.overview || requirements.project_overview || "No overview provided."}
                     </p>
                   </div>
 
                   {/* Functional Requirements */}
                   <div className="p-6 bg-white border border-border rounded-lg space-y-4">
                     <h3 className="text-xs font-mono uppercase tracking-wider text-grey-500">
-                      Functional Requirements ({requirements.functional_requirements.length})
+                      Functional Requirements ({requirements.functional_requirements?.length || 0})
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {requirements.functional_requirements.map((fr) => (
+                      {requirements.functional_requirements?.map((fr) => (
                         <div key={fr.id} className="p-4 bg-grey-50 rounded-lg border border-border text-xs space-y-1">
                           <div className="flex items-center justify-between font-mono font-semibold text-black">
                             <span>{fr.id}</span>
@@ -390,19 +390,57 @@ export default function ProjectWorkspacePage() {
                     </div>
                   </div>
 
-                  {/* Non-Functional & Acceptance Criteria */}
+                  {/* User Roles */}
+                  {requirements.user_roles && requirements.user_roles.length > 0 && (
+                    <div className="p-6 bg-white border border-border rounded-lg space-y-3">
+                      <h3 className="text-xs font-mono uppercase tracking-wider text-grey-500">
+                        Identified User Roles ({requirements.user_roles.length})
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {requirements.user_roles.map((ur, idx) => (
+                          <div key={idx} className="p-3 bg-grey-50 rounded border border-border text-xs">
+                            <div className="font-semibold text-black mb-1">{ur.role_name}</div>
+                            {ur.description && (
+                              <div className="text-grey-600 font-light mb-2 text-[11px] leading-relaxed">
+                                {ur.description}
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-1">
+                              {ur.permissions?.map((p, pidx) => (
+                                <span key={pidx} className="text-[10px] bg-grey-200 text-grey-700 px-1.5 py-0.5 rounded font-mono">
+                                  {p}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Technical Constraints & Acceptance Criteria */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="p-6 bg-white border border-border rounded-lg space-y-3">
                       <h3 className="text-xs font-mono uppercase tracking-wider text-grey-500">
-                        Technical Constraints & Roles
+                        Technical Constraints
                       </h3>
                       <ul className="space-y-2 text-xs text-grey-700">
-                        {requirements.technical_constraints?.map((tc, i) => (
-                          <li key={i} className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-black shrink-0" />
-                            <span>{tc}</span>
-                          </li>
-                        ))}
+                        {requirements.technical_constraints?.map((tc, i) => {
+                          const constraintText =
+                            typeof tc === "string"
+                              ? tc
+                              : tc && typeof tc === "object"
+                              ? `${tc.category ? `[${tc.category}] ` : ""}${tc.constraint || ""}${
+                                  tc.rationale ? ` (${tc.rationale})` : ""
+                                }`
+                              : "";
+                          return (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-black shrink-0 mt-1.5" />
+                              <span className="leading-relaxed">{constraintText}</span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
 
@@ -411,12 +449,28 @@ export default function ProjectWorkspacePage() {
                         Acceptance Criteria
                       </h3>
                       <ul className="space-y-2 text-xs text-grey-700">
-                        {requirements.acceptance_criteria?.map((ac, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-black shrink-0 mt-0.5" />
-                            <span>{ac.criterion}</span>
-                          </li>
-                        ))}
+                        {requirements.acceptance_criteria?.map((ac, i) => {
+                          let text = "";
+                          if (typeof ac === "string") {
+                            text = ac;
+                          } else if (ac && typeof ac === "object") {
+                            if (ac.criterion) {
+                              text = ac.criterion;
+                            } else if (ac.scenario) {
+                              text = `${ac.id ? `${ac.id}: ` : ""}${ac.scenario}`;
+                            } else if (ac.then) {
+                              text = `Given ${ac.given || ""}, When ${ac.when || ""}, Then ${ac.then}`;
+                            } else {
+                              text = JSON.stringify(ac);
+                            }
+                          }
+                          return (
+                            <li key={i} className="flex items-start gap-2">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-black shrink-0 mt-0.5" />
+                              <span className="leading-relaxed">{text}</span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   </div>

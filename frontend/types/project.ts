@@ -26,14 +26,40 @@ export interface FeatureModule {
   components: string[];
 }
 
+export interface UserRole {
+  role_name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface TechnicalConstraint {
+  category?: string;
+  constraint?: string;
+  rationale?: string;
+}
+
+export interface AcceptanceCriterion {
+  id?: string;
+  scenario?: string;
+  given?: string;
+  when?: string;
+  then?: string;
+  criterion?: string;
+  verification_method?: string;
+}
+
 export interface RequirementSpecification {
-  project_overview: string;
+  project_name?: string;
+  overview?: string;
+  project_overview?: string;
+  target_audience?: string;
   functional_requirements: FunctionalRequirement[];
   non_functional_requirements: NonFunctionalRequirement[];
-  user_roles: { role_name: string; permissions: string[] }[];
-  feature_modules: FeatureModule[];
-  technical_constraints: string[];
-  acceptance_criteria: { criterion: string; verification_method: string }[];
+  user_roles: UserRole[];
+  core_features?: FeatureModule[];
+  feature_modules?: FeatureModule[];
+  technical_constraints: (string | TechnicalConstraint)[];
+  acceptance_criteria: (string | AcceptanceCriterion)[];
   clarifying_questions: string[];
 }
 
