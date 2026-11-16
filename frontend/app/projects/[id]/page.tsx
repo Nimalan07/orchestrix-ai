@@ -533,26 +533,65 @@ export default function ProjectWorkspacePage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Entities */}
                     <div className="p-6 bg-white border border-border rounded-lg space-y-4">
-                      <h3 className="text-xs font-mono uppercase tracking-wider text-grey-500">
-                        Data Entities & Schemas
-                      </h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-grey-500">
+                          Data Entities & Schemas
+                        </h3>
+                        <span className="text-[10px] font-mono text-grey-400">
+                          {(architecture.data_entities || architecture.entities || []).length} ENTITIES
+                        </span>
+                      </div>
                       <div className="space-y-3">
-                        {architecture.entities?.map((ent) => (
-                          <div key={ent.name} className="p-3.5 bg-grey-50 rounded border border-border text-xs">
-                            <div className="font-mono font-bold text-black mb-2 flex items-center gap-2">
-                              <Database className="w-3.5 h-3.5" />
-                              <span>{ent.name}</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-grey-600">
-                              {ent.fields?.map((f) => (
-                                <div key={f.name} className="truncate">
-                                  <span className="text-black">{f.name}:</span> {f.type}
-                                  {f.primary_key && " (PK)"}
-                                </div>
-                              ))}
-                            </div>
+                        {(architecture.data_entities || architecture.entities || []).length === 0 ? (
+                          <div className="text-xs text-grey-400 italic py-6 text-center">
+                            No entities defined yet.
                           </div>
-                        ))}
+                        ) : (
+                          (architecture.data_entities || architecture.entities || []).map((ent) => (
+                            <div key={ent.name} className="p-3.5 bg-grey-50 rounded border border-border text-xs space-y-2">
+                              <div className="flex items-center justify-between font-mono">
+                                <div className="font-bold text-black flex items-center gap-2">
+                                  <Database className="w-3.5 h-3.5 text-black" />
+                                  <span>{ent.name}</span>
+                                </div>
+                                {ent.table_name && (
+                                  <span className="text-[10px] bg-grey-200 px-1.5 py-0.5 rounded text-grey-700">
+                                    table: {ent.table_name}
+                                  </span>
+                                )}
+                              </div>
+                              {ent.description && (
+                                <p className="text-[11px] text-grey-600 font-light leading-relaxed">
+                                  {ent.description}
+                                </p>
+                              )}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-mono text-grey-700 pt-1 border-t border-border/60">
+                                {ent.fields?.map((f) => (
+                                  <div key={f.name} className="truncate flex items-center gap-1">
+                                    <span className="text-black font-semibold">{f.name}:</span>
+                                    <span className="text-grey-600">{f.type}</span>
+                                    {f.primary_key && (
+                                      <span className="text-[9px] bg-black text-white px-1 rounded font-bold">
+                                        PK
+                                      </span>
+                                    )}
+                                    {f.unique && !f.primary_key && (
+                                      <span className="text-[9px] bg-grey-200 text-grey-700 px-1 rounded">
+                                        UQ
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              {ent.relationships && ent.relationships.length > 0 && (
+                                <div className="pt-1.5 border-t border-border/60 flex items-center gap-1 text-[10px] font-mono text-grey-500">
+                                  <span className="font-semibold text-grey-700">Rel:</span>
+                                  <span>{ent.relationships.join(", ")}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
 

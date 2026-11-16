@@ -90,22 +90,28 @@ export interface EntityField {
   type: string;
   primary_key?: boolean;
   nullable?: boolean;
+  unique?: boolean;
   description?: string;
 }
 
 export interface DataEntity {
   name: string;
+  table_name?: string;
+  description?: string;
   fields: EntityField[];
+  relationships?: string[];
 }
 
 export interface SystemArchitecture {
   project_name: string;
   architecture_pattern: string;
   tech_stack: TechStack;
-  components: { name: string; type: string; responsibilities: string[] }[];
-  entities: DataEntity[];
+  components?: { name: string; type: string; responsibilities: string[] }[];
+  entities?: DataEntity[];
+  data_entities?: DataEntity[];
   api_contracts: APIContract[];
-  architectural_decisions: { decision: string; rationale: string }[];
+  architectural_decisions?: { decision: string; rationale: string }[];
+  decisions?: any[];
 }
 
 export interface Task {
