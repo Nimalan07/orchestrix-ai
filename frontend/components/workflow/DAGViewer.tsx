@@ -12,34 +12,35 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { DAGResponse, Task } from "../../types/project";
-import { GitBranch, User, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { GitBranch, User } from "lucide-react";
 
 interface DAGViewerProps {
   dag: DAGResponse;
 }
 
 export default function DAGViewer({ dag }: DAGViewerProps) {
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, waveGroups, totalWaves } = useMemo(() => {
     const computedNodes: Node[] = [];
     const computedEdges: Edge[] = [];
 
-    const tasks = dag.tasks || [];
+    const tasks = dag?.tasks || [];
     const taskKeyMap = new Map<string, Task>();
     tasks.forEach((t) => taskKeyMap.set(t.task_key, t));
 
-    // Group tasks by wave
-    const waveGroups: Record<number, Task[]> = {};
+    // Group tasks by wave / tier
+    const groups: Record<number, Task[]> = {};
     tasks.forEach((t) => {
-      const w = t.wave || 1;
-      if (!waveGroups[w]) waveGroups[w] = [];
-      waveGroups[w].push(t);
+      const w = t.tier !== undefined ? t.tier + 1 : (t.wave || 1);
+      if (!groups[w]) groups[w] = [];
+      groups[w].push(t);
     });
 
-    Object.entries(waveGroups).forEach(([waveStr, waveTasks]) => {
+    Object.entries(groups).forEach(([waveStr, waveTasks]) => {
       const wave = parseInt(waveStr, 10);
       waveTasks.forEach((task, idx) => {
         const xPos = (wave - 1) * 320 + 40;
         const yPos = idx * 140 + 40;
+        const displayWave = task.tier !== undefined ? task.tier + 1 : (task.wave || wave);
 
         computedNodes.push({
           id: task.task_key,
@@ -52,7 +53,7 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
                     {task.task_key}
                   </span>
                   <span className="text-[10px] font-mono text-grey-500 uppercase">
-                    Wave {task.wave}
+                    Wave {displayWave}
                   </span>
                 </div>
                 <div className="font-medium text-xs text-black line-clamp-1 mb-2">
@@ -61,7 +62,7 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
                 <div className="flex items-center justify-between text-[10px] text-grey-500 pt-1.5 border-t border-border">
                   <span className="flex items-center gap-1 font-mono">
                     <User className="w-3 h-3 text-grey-400" />
-                    {task.assigned_agent.replace("_", " ")}
+                    {task.assigned_agent ? task.assigned_agent.replace(/_/g, " ") : "Agent"}
                   </span>
                   <span
                     className={`uppercase font-mono px-1.5 py-0.2 rounded text-[9px] ${
@@ -70,7 +71,7 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
                         : "bg-grey-100 text-grey-600"
                     }`}
                   >
-                    {task.status}
+                    {task.status || "pending"}
                   </span>
                 </div>
               </div>
@@ -104,7 +105,17 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
       });
     });
 
-    return { nodes: computedNodes, edges: computedEdges };
+    const computedTotalWaves =
+      dag?.total_tiers ||
+      dag?.total_waves ||
+      Object.keys(groups).length;
+
+    return {
+      nodes: computedNodes,
+      edges: computedEdges,
+      waveGroups: groups,
+      totalWaves: computedTotalWaves,
+    };
   }, [dag]);
 
   return (
@@ -115,25 +126,27 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
           <span className="flex items-center gap-2">
             <GitBranch className="w-4 h-4 text-black" />
             <span className="text-grey-500">Total Tasks:</span>
-            <span className="font-bold text-black">{dag.tasks.length}</span>
+            <span className="font-bold text-black">
+              {dag?.total_tasks ?? dag?.tasks?.length ?? 0}
+            </span>
           </span>
           <span className="flex items-center gap-2">
             <span className="text-grey-500">Execution Waves:</span>
-            <span className="font-bold text-black">{dag.total_waves}</span>
+            <span className="font-bold text-black">{totalWaves}</span>
           </span>
           <span className="flex items-center gap-2">
             <span className="text-grey-500">Cycles Detected:</span>
             <span
               className={`font-bold ${
-                dag.has_cycle ? "text-red-600" : "text-emerald-600"
+                dag?.has_cycle ? "text-red-600" : "text-emerald-600"
               }`}
             >
-              {dag.has_cycle ? "YES (Cycle Found)" : "0 (Acyclic DAG Verified)"}
+              {dag?.has_cycle ? "YES (Cycle Found)" : "0 (Acyclic DAG Verified)"}
             </span>
           </span>
         </div>
         <div className="text-[11px] text-grey-500">
-          Kahn's Topological Sort Engine Active
+          Kahn&apos;s Topological Sort Engine Active
         </div>
       </div>
 
@@ -163,7 +176,7 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
           Topological Wave Sequencing
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.entries(dag.waves).map(([waveNum, waveTasks]) => (
+          {Object.entries(waveGroups).map(([waveNum, waveTasks]) => (
             <div
               key={waveNum}
               className="p-4 bg-white border border-border rounded-lg text-xs"

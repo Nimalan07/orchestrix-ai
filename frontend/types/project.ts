@@ -122,16 +122,22 @@ export interface Task {
   description: string;
   assigned_agent: string;
   status: "pending" | "in_progress" | "completed" | "failed";
-  wave: number;
+  tier?: number;
+  wave?: number;
+  execution_order?: number;
   dependencies: string[];
 }
 
 export interface DAGResponse {
+  project_id?: string;
+  total_tasks?: number;
+  total_tiers?: number;
+  total_waves?: number;
+  parallel_batches?: string[][];
   tasks: Task[];
-  waves: Record<string, Task[]>;
-  total_waves: number;
-  has_cycle: boolean;
-  cycle_path: string[];
+  waves?: Record<string, Task[]>;
+  has_cycle?: boolean;
+  cycle_path?: string[];
 }
 
 export interface FileArtifact {
