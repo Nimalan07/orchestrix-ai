@@ -55,7 +55,7 @@ class ProcessSandbox(BaseSandbox):
             "TMP": os.environ.get("TMP", "C:\\Temp"),
             "PYTHONUNBUFFERED": "1",
             "PYTHONDONTWRITEBYTECODE": "1",
-            "PYTHONPATH": str(abs_workdir),
+            "PYTHONPATH": f"{abs_workdir}{os.pathsep}{abs_workdir.parent}",
         }
 
         # Inherit virtualenv path if available

@@ -248,7 +248,9 @@ class CodeGenerationOrchestrator:
 
         created_meta = []
         for rel_path, content in scaffold_files.items():
-            if not (workspace_dir / rel_path).exists():
+            dest = workspace_dir / rel_path
+            is_corrupt_entrypoint = rel_path.endswith("main.py") and dest.exists() and dest.stat().st_size < 100
+            if not dest.exists() or is_corrupt_entrypoint:
                 meta = workspace_service.write_file(
                     project_slug=project.name,
                     relative_path=rel_path,

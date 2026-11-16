@@ -4,6 +4,7 @@ Orchestrates transparent execution across Docker containers or isolated local pr
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -53,13 +54,28 @@ class SandboxRunner:
         if not target_dir.exists():
             target_dir = workspace_dir
 
-        cmd = [sys.executable, "-m", "pytest", "-v"]
+        target_abs = str(target_dir.resolve())
+        parent_abs = str(target_dir.parent.resolve())
+        combined_pythonpath = f"{target_abs}{os.pathsep}{parent_abs}"
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-v",
+            "-o",
+            f"rootdir={target_abs}",
+        ]
+        ini_file = target_dir / "pytest.ini"
+        if ini_file.exists():
+            cmd.extend(["-c", str(ini_file.resolve())])
+
         sandbox = self.get_preferred_sandbox()
         return sandbox.execute_command(
             cmd=cmd,
             workdir=target_dir,
             timeout=timeout,
-            env={"PYTHONPATH": str(target_dir.resolve())},
+            env={"PYTHONPATH": combined_pythonpath},
         )
 
     def run_command(

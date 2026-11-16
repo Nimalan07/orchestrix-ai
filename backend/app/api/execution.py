@@ -46,10 +46,19 @@ async def execute_and_heal_project(
     # 1. Ensure scaffolding is present
     code_generation_orchestrator.ensure_project_scaffolding(db, project)
 
-    # 2. Ensure automated tests exist
-    existing_files = [f["relative_path"] for f in workspace_service.list_files(project.name)]
-    has_tests = any("backend/tests/test_" in f for f in existing_files)
-    if not has_tests:
+    # 2. Ensure automated tests exist and are valid
+    workspace_dir = workspace_service.get_workspace_dir(project.name)
+    test_file = workspace_dir / "backend" / "tests" / "test_api.py"
+    valid_tests = False
+    if test_file.exists():
+        try:
+            content = test_file.read_text(encoding="utf-8")
+            if "def test_" in content:
+                valid_tests = True
+        except Exception:
+            valid_tests = False
+
+    if not valid_tests:
         default_tests = testing_agent.generate_default_tests(project.name, existing_files)
         for t in default_tests:
             workspace_service.write_file(

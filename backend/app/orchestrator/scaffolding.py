@@ -36,19 +36,25 @@ class ScaffoldingGenerator:
         # 3. Backend main.py
         files["backend/app/main.py"] = self._build_main_py(project_name, routers)
 
-        # 4. Backend Dockerfile
+        # 4. Backend pytest configuration and package roots
+        files["backend/pytest.ini"] = self._build_pytest_ini()
+        files["backend/__init__.py"] = '"""Backend package."""\n'
+        files["backend/app/__init__.py"] = '"""App package."""\n'
+        files["backend/tests/__init__.py"] = '"""Tests package."""\n'
+
+        # 5. Backend Dockerfile
         files["backend/Dockerfile"] = self._build_backend_dockerfile()
 
-        # 5. Frontend package.json
+        # 6. Frontend package.json
         files["frontend/package.json"] = self._build_package_json(slug)
 
-        # 6. Frontend tsconfig.json
+        # 7. Frontend tsconfig.json
         files["frontend/tsconfig.json"] = self._build_tsconfig_json()
 
-        # 7. Frontend Dockerfile
+        # 8. Frontend Dockerfile
         files["frontend/Dockerfile"] = self._build_frontend_dockerfile()
 
-        # 8. docker-compose.yml
+        # 9. docker-compose.yml
         files["docker-compose.yml"] = self._build_docker_compose(db_name)
 
         return files
@@ -58,12 +64,22 @@ class ScaffoldingGenerator:
 uvicorn[standard]>=0.34.0
 sqlalchemy>=2.0.0
 pydantic>=2.10.0
+pydantic-settings>=2.0.0
 pytest>=8.0.0
 httpx>=0.28.0
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 bcrypt>=4.0.0
 python-multipart>=0.0.9
+"""
+
+    def _build_pytest_ini(self) -> str:
+        return """[pytest]
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+asyncio_default_fixture_loop_scope = function
 """
 
     def _build_session_py(self, db_name: str) -> str:
@@ -118,13 +134,22 @@ Generated automatically by Orchestrix.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database.session import engine, Base
+
+try:
+    from app.database import engine, Base
+except Exception:
+    try:
+        from app.database.session import engine, Base
+    except Exception:
+        engine = None
+        Base = None
 
 # Create tables on startup if not already created
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception:
-    pass
+if engine is not None and Base is not None:
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
 
 app = FastAPI(
     title="{project_name} API",
