@@ -475,6 +475,10 @@ def list_project_files(
     "/{project_id}/files/content",
     response_class=Response
 )
+@router.get(
+    "/{project_id}/file",
+    response_class=Response
+)
 def read_project_file_content(
     project_id: str,
     file_path: str = Query(..., description="Relative file path, e.g. README.md"),

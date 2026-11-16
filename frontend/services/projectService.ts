@@ -111,10 +111,24 @@ export const projectService = {
     }
   },
 
-  getFiles: async (id: string): Promise<{ relative_path: string; size_bytes: number; sha256: string }[]> => {
+  getFiles: async (id: string): Promise<{ relative_path: string; size_bytes?: number; sha256?: string; file_path?: string; file_hash?: string }[]> => {
     try {
-      const res = await api.get(`/api/projects/${id}/files`);
-      return res.data;
+      const manifestRes = await api.get<GenerationManifest>(`/api/projects/${id}/manifest`);
+      if (manifestRes.data?.files && manifestRes.data.files.length > 0) {
+        return manifestRes.data.files;
+      }
+    } catch {
+      // Fallback to database file artifacts
+    }
+    try {
+      const res = await api.get<any[]>(`/api/projects/${id}/files`);
+      return res.data.map((f) => ({
+        relative_path: f.file_path || f.relative_path || "",
+        file_path: f.file_path || f.relative_path || "",
+        sha256: f.file_hash || f.sha256 || "",
+        file_hash: f.file_hash || f.sha256 || "",
+        size_bytes: f.size_bytes || 0,
+      }));
     } catch (err: any) {
       if (err.response?.status === 404) return [];
       throw err;
@@ -122,7 +136,7 @@ export const projectService = {
   },
 
   readFile: async (id: string, filePath: string): Promise<string> => {
-    const res = await api.get(`/api/projects/${id}/file`, {
+    const res = await api.get(`/api/projects/${id}/files/content`, {
       params: { file_path: filePath },
       responseType: "text",
     });

@@ -3,35 +3,50 @@
 import { useState, useEffect } from "react";
 import { projectService } from "../../services/projectService";
 import {
-  FileText,
   FileCode,
   Download,
   Copy,
   Check,
   RefreshCw,
   FolderOpen,
-  Terminal,
 } from "lucide-react";
+
+interface WorkspaceFile {
+  relative_path?: string;
+  file_path?: string;
+  size_bytes?: number;
+  sha256?: string;
+  file_hash?: string;
+}
 
 interface FileExplorerProps {
   projectId: string;
 }
 
 export default function FileExplorer({ projectId }: FileExplorerProps) {
-  const [files, setFiles] = useState<{ relative_path: string; size_bytes: number; sha256: string }[]>([]);
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
   const [loadingList, setLoadingList] = useState(true);
   const [loadingFile, setLoadingFile] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const getFilePath = (file: WorkspaceFile) =>
+    file.relative_path || file.file_path || "";
+
+  const getFileHash = (file?: WorkspaceFile) =>
+    file?.sha256 || file?.file_hash || "";
+
   const fetchFileList = async () => {
     try {
       setLoadingList(true);
       const list = await projectService.getFiles(projectId);
       setFiles(list);
-      if (list.length > 0 && !selectedPath) {
-        handleSelectFile(list[0].relative_path);
+      if (list.length > 0) {
+        const firstPath = getFilePath(list[0]);
+        if (firstPath) {
+          handleSelectFile(firstPath);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch workspace files:", err);
@@ -65,7 +80,8 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const selectedMeta = files.find((f) => f.relative_path === selectedPath);
+  const selectedMeta = files.find((f) => getFilePath(f) === selectedPath);
+  const selectedHash = getFileHash(selectedMeta);
 
   return (
     <div className="space-y-4">
@@ -120,31 +136,36 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
             <div className="text-[11px] font-mono uppercase text-grey-400 px-2 py-1 tracking-wider flex items-center justify-between">
               <span>Files ({files.length})</span>
             </div>
-            {files.map((file) => (
-              <button
-                key={file.relative_path}
-                onClick={() => handleSelectFile(file.relative_path)}
-                className={`w-full text-left px-3 py-2 rounded-md text-xs font-mono flex items-center justify-between gap-2 transition-colors ${
-                  selectedPath === file.relative_path
-                    ? "bg-black text-white"
-                    : "text-grey-700 hover:bg-grey-50"
-                }`}
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <FileCode
-                    className={`w-3.5 h-3.5 shrink-0 ${
-                      selectedPath === file.relative_path
-                        ? "text-white"
-                        : "text-grey-400"
-                    }`}
-                  />
-                  <span className="truncate">{file.relative_path}</span>
-                </div>
-                <span className="text-[10px] opacity-60 shrink-0">
-                  {(file.size_bytes / 1024).toFixed(1)}k
-                </span>
-              </button>
-            ))}
+            {files.map((file) => {
+              const filePath = getFilePath(file);
+              return (
+                <button
+                  key={filePath}
+                  onClick={() => handleSelectFile(filePath)}
+                  className={`w-full text-left px-3 py-2 rounded-md text-xs font-mono flex items-center justify-between gap-2 transition-colors ${
+                    selectedPath === filePath
+                      ? "bg-black text-white"
+                      : "text-grey-700 hover:bg-grey-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <FileCode
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        selectedPath === filePath
+                          ? "text-white"
+                          : "text-grey-400"
+                      }`}
+                    />
+                    <span className="truncate">{filePath}</span>
+                  </div>
+                  {file.size_bytes !== undefined && (
+                    <span className="text-[10px] opacity-60 shrink-0">
+                      {(file.size_bytes / 1024).toFixed(1)}k
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Code Viewer */}
@@ -155,9 +176,9 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
                 {selectedPath || "Select a file to view"}
               </span>
               <div className="flex items-center gap-4 shrink-0">
-                {selectedMeta && (
+                {selectedHash && (
                   <span className="text-[10px] text-grey-500 hidden sm:inline">
-                    SHA256: {selectedMeta.sha256.slice(0, 10)}...
+                    SHA256: {selectedHash.slice(0, 10)}...
                   </span>
                 )}
                 <button
