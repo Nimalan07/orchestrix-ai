@@ -1,9 +1,13 @@
+import io
+import os
+import zipfile
 from typing import Optional, List
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import (
     APIRouter, Depends, HTTPException, Query, Response, status, Body
 )
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.schemas.project import (
@@ -524,3 +528,60 @@ def get_project_manifest(
         files=files,
         generated_at=datetime.now(timezone.utc),
     )
+
+
+# GET EXPORT ZIP
+@router.get(
+    "/{project_id}/export",
+    summary="Export generated project workspace as ZIP"
+)
+def export_project_zip(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Package and download the entire generated application workspace as a clean ZIP archive.
+    Excludes cache, virtualenv, and sensitive environment files.
+    """
+    project = get_project(db, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    workspace_dir = workspace_service.get_workspace_dir(project.name)
+    if not workspace_dir.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workspace for project '{project.name}' does not exist on disk."
+        )
+
+    zip_buffer = io.BytesIO()
+    ignore_dirs = {".git", "__pycache__", "node_modules", ".pytest_cache", ".venv", "venv", ".next"}
+    ignore_files = {".env", ".DS_Store", "app.db"}
+    slug = workspace_service.slugify(project.name)
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for root, dirs, files in os.walk(workspace_dir):
+            dirs[:] = [d for d in dirs if d not in ignore_dirs]
+            for file_name in files:
+                if file_name in ignore_files or file_name.endswith(".pyc"):
+                    continue
+                file_path = Path(root) / file_name
+                rel_path = file_path.relative_to(workspace_dir)
+                archive_name = f"{slug}/{rel_path}".replace("\\", "/")
+                zip_file.write(file_path, arcname=archive_name)
+
+    zip_buffer.seek(0)
+    filename = f"{slug}-orchestrix.zip"
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{filename}\"",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
+    )
+
