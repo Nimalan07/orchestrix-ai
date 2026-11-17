@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import {
   ReactFlow,
   MiniMap,
@@ -9,17 +9,19 @@ import {
   Node,
   Edge,
   MarkerType,
+  useNodesState,
+  useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { DAGResponse, Task } from "../../types/project";
-import { GitBranch, User } from "lucide-react";
+import { GitBranch, User, Move } from "lucide-react";
 
 interface DAGViewerProps {
   dag: DAGResponse;
 }
 
 export default function DAGViewer({ dag }: DAGViewerProps) {
-  const { nodes, edges, waveGroups, totalWaves } = useMemo(() => {
+  const { initialNodes, initialEdges, waveGroups, totalWaves } = useMemo(() => {
     const computedNodes: Node[] = [];
     const computedEdges: Edge[] = [];
 
@@ -38,8 +40,8 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
     Object.entries(groups).forEach(([waveStr, waveTasks]) => {
       const wave = parseInt(waveStr, 10);
       waveTasks.forEach((task, idx) => {
-        const xPos = (wave - 1) * 320 + 40;
-        const yPos = idx * 140 + 40;
+        const xPos = (wave - 1) * 330 + 40;
+        const yPos = idx * 150 + 50;
         const displayWave = task.tier !== undefined ? task.tier + 1 : (task.wave || wave);
 
         computedNodes.push({
@@ -47,12 +49,13 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
           position: { x: xPos, y: yPos },
           data: {
             label: (
-              <div className="p-3 bg-white border border-border rounded-lg shadow-sm hover:border-black transition-all text-left w-64">
+              <div className="p-3.5 bg-white border border-border rounded-lg shadow-sm hover:border-black hover:shadow-md transition-all text-left w-64 cursor-grab active:cursor-grabbing select-none">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-mono bg-grey-100 text-grey-800 px-1.5 py-0.5 rounded font-semibold">
                     {task.task_key}
                   </span>
-                  <span className="text-[10px] font-mono text-grey-500 uppercase">
+                  <span className="text-[10px] font-mono text-grey-500 uppercase flex items-center gap-1">
+                    <Move className="w-2.5 h-2.5 text-grey-400" />
                     Wave {displayWave}
                   </span>
                 </div>
@@ -60,14 +63,14 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
                   {task.title}
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-grey-500 pt-1.5 border-t border-border">
-                  <span className="flex items-center gap-1 font-mono">
-                    <User className="w-3 h-3 text-grey-400" />
+                  <span className="flex items-center gap-1 font-mono truncate max-w-[130px]">
+                    <User className="w-3 h-3 text-grey-400 shrink-0" />
                     {task.assigned_agent ? task.assigned_agent.replace(/_/g, " ") : "Agent"}
                   </span>
                   <span
-                    className={`uppercase font-mono px-1.5 py-0.2 rounded text-[9px] ${
+                    className={`uppercase font-mono px-1.5 py-0.2 rounded text-[9px] shrink-0 ${
                       task.status === "completed"
-                        ? "bg-emerald-50 text-emerald-700"
+                        ? "bg-emerald-50 text-emerald-700 font-semibold"
                         : "bg-grey-100 text-grey-600"
                     }`}
                   >
@@ -91,11 +94,12 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
               id: `e-${depKey}-${task.task_key}`,
               source: depKey,
               target: task.task_key,
-              animated: task.status === "in_progress",
-              style: { stroke: "#71717A", strokeWidth: 1.5 },
+              type: "smoothstep",
+              animated: true,
+              style: { stroke: "#18181B", strokeWidth: 1.75 },
               markerEnd: {
                 type: MarkerType.ArrowClosed,
-                color: "#71717A",
+                color: "#18181B",
                 width: 14,
                 height: 14,
               },
@@ -111,12 +115,20 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
       Object.keys(groups).length;
 
     return {
-      nodes: computedNodes,
-      edges: computedEdges,
+      initialNodes: computedNodes,
+      initialEdges: computedEdges,
       waveGroups: groups,
       totalWaves: computedTotalWaves,
     };
   }, [dag]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  useEffect(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
 
   return (
     <div className="space-y-6">
@@ -145,16 +157,27 @@ export default function DAGViewer({ dag }: DAGViewerProps) {
             </span>
           </span>
         </div>
-        <div className="text-[11px] text-grey-500">
-          Kahn&apos;s Topological Sort Engine Active
+        <div className="text-[11px] text-grey-500 flex items-center gap-1.5">
+          <Move className="w-3.5 h-3.5 text-grey-400" />
+          <span>Interactive Canvas • Nodes Draggable • Flowing Dependency Lines</span>
         </div>
       </div>
 
       {/* React Flow Interactive Graph */}
-      <div className="h-[460px] w-full border border-border rounded-xl bg-white overflow-hidden shadow-sm relative">
+      <div className="h-[480px] w-full border border-border rounded-xl bg-white overflow-hidden shadow-sm relative group">
+        <div className="absolute top-3 left-4 z-10 flex items-center gap-1.5 text-[11px] font-mono text-grey-500 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded border border-border shadow-xs pointer-events-none">
+          <Move className="w-3 h-3 text-grey-400" />
+          <span>Drag any node to reposition • Lines dynamically follow</span>
+        </div>
+
         <ReactFlow
           nodes={nodes}
           edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodesDraggable={true}
+          nodesConnectable={false}
+          elementsSelectable={true}
           fitView
           minZoom={0.2}
           maxZoom={1.5}

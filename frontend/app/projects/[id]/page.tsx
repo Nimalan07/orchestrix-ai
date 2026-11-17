@@ -16,6 +16,7 @@ import {
 } from "../../../types/project";
 import {
   ArrowLeft,
+  ArrowRight,
   Sparkles,
   Download,
   CheckCircle2,
@@ -168,19 +169,85 @@ export default function ProjectWorkspacePage() {
     );
   }
 
+  type TabId = "overview" | "requirements" | "architecture" | "tasks" | "files" | "executions";
+
+  const TABS: { id: TabId; label: string }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "requirements", label: "Requirements" },
+    { id: "architecture", label: "Architecture" },
+    { id: "tasks", label: "Task DAG" },
+    { id: "files", label: "Workspace Files" },
+    { id: "executions", label: "Executions & QA" },
+  ];
+
+  const navigateTab = (targetTab: TabId) => {
+    setActiveTab(targetTab);
+    const mainEl = document.getElementById("workspace-main");
+    if (mainEl) {
+      mainEl.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const renderSectionNav = (currentTabId: TabId) => {
+    const currentIndex = TABS.findIndex((t) => t.id === currentTabId);
+    const prevTab = currentIndex > 0 ? TABS[currentIndex - 1] : null;
+    const nextTab = currentIndex < TABS.length - 1 ? TABS[currentIndex + 1] : null;
+
+    return (
+      <div className="pt-8 border-t border-border flex items-center justify-between mt-10">
+        {prevTab ? (
+          <button
+            onClick={() => navigateTab(prevTab.id)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg text-xs font-mono text-grey-600 hover:text-black hover:border-black transition-all bg-white shadow-xs group"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-1" />
+            <span>Back: {prevTab.label}</span>
+          </button>
+        ) : (
+          <div />
+        )}
+
+        {nextTab ? (
+          <button
+            onClick={() => navigateTab(nextTab.id)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-black text-white hover:bg-grey-800 rounded-lg text-xs font-mono font-medium transition-all shadow-sm group"
+          >
+            <span>Next: {nextTab.label}</span>
+            <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+          </button>
+        ) : (
+          <button
+            onClick={() => navigateTab("overview")}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-black text-white hover:bg-grey-800 rounded-lg text-xs font-mono font-medium transition-all shadow-sm group"
+          >
+            <span>Return to Overview</span>
+            <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
   // Pipeline stages calculation
-  const stages = [
-    { name: "Requirements", ready: !!requirements, action: handleAnalyze },
-    { name: "Architecture", ready: !!architecture, action: handleArchitect },
-    { name: "Task DAG", ready: !!dag, action: handlePlan },
-    { name: "Code Generation", ready: project.status === "completed", action: handleGenerateCode },
+  const stages: { name: string; tab: TabId; ready: boolean; action: () => void }[] = [
+    { name: "Requirements", tab: "requirements", ready: !!requirements, action: handleAnalyze },
+    { name: "Architecture", tab: "architecture", ready: !!architecture, action: handleArchitect },
+    { name: "Task DAG", tab: "tasks", ready: !!dag, action: handlePlan },
+    {
+      name: "Code Generation",
+      tab: "files",
+      ready: project.status === "completed" || (dag && dag.tasks && dag.tasks.length > 0) || false,
+      action: handleGenerateCode,
+    },
   ];
 
   return (
     <div className="min-h-screen bg-white flex">
       <Sidebar />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto" id="workspace-main">
         {/* Top Header */}
         <header className="h-16 border-b border-border px-8 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md z-10">
           <div className="flex items-center gap-3">
@@ -237,17 +304,10 @@ export default function ProjectWorkspacePage() {
         {/* Tab Navigation */}
         <div className="border-b border-border px-8 bg-grey-50/50">
           <nav className="flex space-x-8 text-xs font-medium">
-            {[
-              { id: "overview", label: "Overview" },
-              { id: "requirements", label: "Requirements" },
-              { id: "architecture", label: "Architecture" },
-              { id: "tasks", label: "Task DAG" },
-              { id: "files", label: "Workspace Files" },
-              { id: "executions", label: "Executions & QA" },
-            ].map((tab) => (
+            {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => navigateTab(tab.id)}
                 className={`py-3.5 border-b-2 font-mono uppercase tracking-wider transition-colors ${
                   activeTab === tab.id
                     ? "border-black text-black font-bold"
@@ -320,17 +380,34 @@ export default function ProjectWorkspacePage() {
                       <div className="font-medium text-sm text-black">
                         {stage.name}
                       </div>
-                      <button
-                        onClick={stage.action}
-                        disabled={actionLoading}
-                        className={`w-full py-1.5 px-3 rounded text-xs font-mono transition-colors ${
-                          stage.ready
-                            ? "bg-grey-100 hover:bg-grey-200 text-grey-700"
-                            : "bg-black hover:bg-grey-800 text-white"
-                        }`}
-                      >
-                        {stage.ready ? "Re-Run Stage" : "Execute Stage"}
-                      </button>
+                      {stage.ready ? (
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => navigateTab(stage.tab)}
+                            className="flex-1 py-1.5 px-3 rounded text-xs font-mono font-medium bg-black text-white hover:bg-grey-800 transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <span>Open {stage.name}</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={stage.action}
+                            disabled={actionLoading}
+                            className="p-1.5 rounded text-xs font-mono bg-grey-100 hover:bg-grey-200 text-grey-600 transition-colors"
+                            title={`Re-run ${stage.name}`}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={stage.action}
+                          disabled={actionLoading}
+                          className="w-full py-1.5 px-3 rounded text-xs font-mono font-medium bg-black hover:bg-grey-800 text-white transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <Play className="w-3 h-3" />
+                          <span>Execute Stage</span>
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -652,6 +729,9 @@ export default function ProjectWorkspacePage() {
 
           {/* TAB 6: EXECUTIONS & QA */}
           {activeTab === "executions" && <ExecutionMonitor projectId={project.id} />}
+
+          {/* Bottom Section Navigation */}
+          {renderSectionNav(activeTab)}
         </div>
       </main>
     </div>
