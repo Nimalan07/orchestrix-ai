@@ -58,8 +58,20 @@ class SandboxRunner:
         parent_abs = str(target_dir.parent.resolve())
         combined_pythonpath = f"{target_abs}{os.pathsep}{parent_abs}"
 
+        # Resolve virtualenv Python interpreter if available
+        py_exe = sys.executable
+        possible_venvs = [
+            workspace_dir.parent.parent / "backend" / "venv" / "Scripts" / "python.exe",
+            workspace_dir.parent.parent / "venv" / "Scripts" / "python.exe",
+            Path(sys.executable),
+        ]
+        for v in possible_venvs:
+            if v.exists():
+                py_exe = str(v.resolve())
+                break
+
         cmd = [
-            sys.executable,
+            py_exe,
             "-m",
             "pytest",
             "-v",

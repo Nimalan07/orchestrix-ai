@@ -58,10 +58,16 @@ class ProcessSandbox(BaseSandbox):
             "PYTHONPATH": f"{abs_workdir}{os.pathsep}{abs_workdir.parent}",
         }
 
-        # Inherit virtualenv path if available
-        venv_bin = Path(sys.executable).parent
-        if venv_bin.exists():
-            clean_env["PATH"] = f"{venv_bin}{os.pathsep}{clean_env['PATH']}"
+        # Inherit virtualenv bin/scripts path if available
+        possible_venv_dirs = [
+            abs_workdir.parent.parent / "backend" / "venv" / "Scripts",
+            abs_workdir.parent.parent / "venv" / "Scripts",
+            Path(sys.executable).parent,
+        ]
+        for venv_dir in possible_venv_dirs:
+            if venv_dir.exists():
+                clean_env["PATH"] = f"{venv_dir.resolve()}{os.pathsep}{clean_env['PATH']}"
+                break
 
         if env:
             clean_env.update(env)
