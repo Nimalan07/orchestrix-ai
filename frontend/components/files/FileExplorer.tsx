@@ -9,6 +9,7 @@ import {
   Check,
   RefreshCw,
   FolderOpen,
+  Code2,
 } from "lucide-react";
 
 interface WorkspaceFile {
@@ -21,15 +22,23 @@ interface WorkspaceFile {
 
 interface FileExplorerProps {
   projectId: string;
+  onGenerateCode?: () => Promise<void> | void;
+  isGenerating?: boolean;
 }
 
-export default function FileExplorer({ projectId }: FileExplorerProps) {
+export default function FileExplorer({
+  projectId,
+  onGenerateCode,
+  isGenerating = false,
+}: FileExplorerProps) {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
   const [loadingList, setLoadingList] = useState(true);
   const [loadingFile, setLoadingFile] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const getFilePath = (file: WorkspaceFile) =>
     file.relative_path || file.file_path || "";
@@ -44,7 +53,7 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
       setFiles(list);
       if (list.length > 0) {
         const firstPath = getFilePath(list[0]);
-        if (firstPath) {
+        if (firstPath && !selectedPath) {
           handleSelectFile(firstPath);
         }
       }
@@ -58,6 +67,28 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
   useEffect(() => {
     fetchFileList();
   }, [projectId]);
+
+  const handleGenerate = async () => {
+    try {
+      setGenerating(true);
+      setGenerateError(null);
+      if (onGenerateCode) {
+        await onGenerateCode();
+      } else {
+        await projectService.generateCode(projectId);
+      }
+      await fetchFileList();
+    } catch (err: any) {
+      console.error("Code generation failed:", err);
+      setGenerateError(
+        err.response?.data?.detail ||
+          err.message ||
+          "Code generation failed. Please ensure the Task DAG has been planned first."
+      );
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleSelectFile = async (path: string) => {
     try {
@@ -82,6 +113,7 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
 
   const selectedMeta = files.find((f) => getFilePath(f) === selectedPath);
   const selectedHash = getFileHash(selectedMeta);
+  const busyGenerating = generating || isGenerating;
 
   return (
     <div className="space-y-4">
@@ -96,7 +128,26 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleGenerate}
+            disabled={busyGenerating}
+            className="inline-flex items-center gap-1.5 bg-black hover:bg-grey-800 text-white text-xs font-mono font-medium px-3.5 py-2 rounded-md transition-all shadow-xs disabled:opacity-50"
+            title="Generate source files via specialized developer agents"
+          >
+            {busyGenerating ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Generating Code...</span>
+              </>
+            ) : (
+              <>
+                <Code2 className="w-3.5 h-3.5" />
+                <span>{files.length === 0 ? "Generate Project Code" : "Re-Generate Code"}</span>
+              </>
+            )}
+          </button>
+
           <button
             onClick={fetchFileList}
             className="p-2 text-grey-500 hover:text-black rounded hover:bg-grey-100 transition-colors"
@@ -108,13 +159,36 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
           <a
             href={projectService.getExportUrl(projectId)}
             download
-            className="inline-flex items-center gap-2 bg-black text-white hover:bg-grey-800 text-xs font-medium px-4 py-2 rounded-md transition-all shadow-sm"
+            className="inline-flex items-center gap-2 bg-white border border-border text-grey-800 hover:bg-grey-50 text-xs font-medium px-3.5 py-2 rounded-md transition-all shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export Project ZIP</span>
+            <span>Export ZIP</span>
           </a>
         </div>
       </div>
+
+      {/* Generation In-Progress Alert */}
+      {busyGenerating && (
+        <div className="p-4 bg-grey-50 border border-border rounded-lg text-xs font-mono text-grey-800 flex items-center gap-3 animate-pulse">
+          <RefreshCw className="w-4 h-4 animate-spin text-black shrink-0" />
+          <span>
+            Autonomous developer agents (Database Engineer, Backend Developer, Frontend Developer) are synthesizing application files and scaffolding...
+          </span>
+        </div>
+      )}
+
+      {/* Generation Error Alert */}
+      {generateError && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center justify-between gap-4">
+          <span>{generateError}</span>
+          <button
+            onClick={() => setGenerateError(null)}
+            className="text-xs font-mono underline hover:text-red-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {loadingList ? (
         <div className="py-20 text-center text-xs font-mono text-grey-500">
@@ -122,12 +196,34 @@ export default function FileExplorer({ projectId }: FileExplorerProps) {
           Loading workspace files...
         </div>
       ) : files.length === 0 ? (
-        <div className="p-12 text-center bg-grey-50 border border-dashed border-border rounded-lg space-y-2">
-          <FolderOpen className="w-8 h-8 mx-auto text-grey-400" />
-          <h4 className="text-sm font-medium text-black">No files generated yet</h4>
-          <p className="text-xs text-grey-500 max-w-sm mx-auto font-light">
-            Trigger code generation from the project workflow to synthesize backend and frontend source files.
-          </p>
+        <div className="p-12 text-center bg-grey-50 border border-dashed border-border rounded-lg space-y-4">
+          <FolderOpen className="w-10 h-10 mx-auto text-grey-400" />
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold text-black">No files generated yet</h4>
+            <p className="text-xs text-grey-500 max-w-md mx-auto font-light leading-relaxed">
+              Trigger autonomous code generation right here to deploy the Database Engineer, Backend Developer, and Frontend Developer agents to synthesize models, APIs, and components.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={handleGenerate}
+              disabled={busyGenerating}
+              className="inline-flex items-center gap-2 bg-black text-white hover:bg-grey-800 text-xs font-mono font-medium px-6 py-2.5 rounded-lg transition-all shadow-sm disabled:opacity-50"
+            >
+              {busyGenerating ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Synthesizing Source Files & Scaffolding...</span>
+                </>
+              ) : (
+                <>
+                  <Code2 className="w-4 h-4" />
+                  <span>Generate Project Code</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

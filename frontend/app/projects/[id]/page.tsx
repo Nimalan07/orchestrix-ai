@@ -725,7 +725,13 @@ export default function ProjectWorkspacePage() {
           )}
 
           {/* TAB 5: FILES */}
-          {activeTab === "files" && <FileExplorer projectId={project.id} />}
+          {activeTab === "files" && (
+            <FileExplorer
+              projectId={project.id}
+              onGenerateCode={handleGenerateCode}
+              isGenerating={actionLoading}
+            />
+          )}
 
           {/* TAB 6: EXECUTIONS & QA */}
           {activeTab === "executions" && <ExecutionMonitor projectId={project.id} />}
