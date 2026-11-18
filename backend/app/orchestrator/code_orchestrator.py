@@ -41,6 +41,7 @@ class CodeGenerationOrchestrator:
         """
         Extract concise existing code context (models, schemas, routers) from workspace
         so downstream agents don't hallucinate or invent conflicting signatures.
+        Keeps context lightweight and compact to prevent LLM context-window exhaustion.
         """
         try:
             workspace_dir = workspace_service.get_workspace_dir(project_name)
@@ -59,19 +60,44 @@ class CodeGenerationOrchestrator:
         if task.assigned_agent == "frontend_developer":
             target_dirs.append(workspace_dir / "backend" / "app" / "api")
 
+        total_chars = 0
+        MAX_TOTAL_CHARS = 2500
+
         for target_dir in target_dirs:
             if not target_dir.exists():
                 continue
-            for py_file in target_dir.glob("*.py"):
+            for py_file in sorted(target_dir.glob("*.py")):
                 if py_file.name.startswith("__"):
                     continue
+                if total_chars >= MAX_TOTAL_CHARS:
+                    break
                 try:
                     rel_path = py_file.relative_to(workspace_dir).as_posix()
                     content = py_file.read_text(encoding="utf-8")
-                    lines = content.splitlines()
-                    # Truncate to first 60 lines per file
-                    truncated = "\n".join(lines[:60])
-                    context_files.append(f"--- {rel_path} ---\n{truncated}")
+
+                    filtered_lines = []
+                    for line in content.splitlines():
+                        s = line.strip()
+                        if (
+                            s.startswith("class ")
+                            or s.startswith("def ")
+                            or s.startswith("@router")
+                            or s.startswith("__tablename__")
+                            or ": Mapped[" in s
+                            or "model_config" in s
+                            or ": str" in s
+                            or ": int" in s
+                            or ": bool" in s
+                            or ": datetime" in s
+                        ):
+                            filtered_lines.append(line)
+                        elif len(filtered_lines) < 20 and s and not s.startswith("#") and not s.startswith('"""'):
+                            filtered_lines.append(line)
+
+                    snippet = "\n".join(filtered_lines[:25])
+                    entry = f"--- {rel_path} ---\n{snippet}"
+                    context_files.append(entry)
+                    total_chars += len(entry)
                 except Exception:
                     pass
 
