@@ -1,7 +1,9 @@
 import json
 import logging
+import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from pathlib import Path
+from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.task import Task
@@ -35,13 +37,106 @@ class CodeGenerationOrchestrator:
         "frontend_developer": frontend_developer_agent,
     }
 
+    def _build_workspace_context(self, project_name: str, task: TaskResponse) -> str:
+        """
+        Extract concise existing code context (models, schemas, routers) from workspace
+        so downstream agents don't hallucinate or invent conflicting signatures.
+        """
+        try:
+            workspace_dir = workspace_service.get_workspace_dir(project_name)
+        except Exception:
+            return ""
+
+        if not workspace_dir.exists():
+            return ""
+
+        context_files = []
+        target_dirs = [
+            workspace_dir / "backend" / "app" / "database",
+            workspace_dir / "backend" / "app" / "models",
+            workspace_dir / "backend" / "app" / "schemas",
+        ]
+        if task.assigned_agent == "frontend_developer":
+            target_dirs.append(workspace_dir / "backend" / "app" / "api")
+
+        for target_dir in target_dirs:
+            if not target_dir.exists():
+                continue
+            for py_file in target_dir.glob("*.py"):
+                if py_file.name.startswith("__"):
+                    continue
+                try:
+                    rel_path = py_file.relative_to(workspace_dir).as_posix()
+                    content = py_file.read_text(encoding="utf-8")
+                    lines = content.splitlines()
+                    # Truncate to first 60 lines per file
+                    truncated = "\n".join(lines[:60])
+                    context_files.append(f"--- {rel_path} ---\n{truncated}")
+                except Exception:
+                    pass
+
+        return "\n\n".join(context_files)
+
+    def _sanitize_generated_file(self, file_path: str, content: str) -> str:
+        """
+        Defensive post-processing sanitizer for LLM-generated code.
+        Repairs common hallucinations, import errors, and framework mismatches.
+        """
+        if file_path.endswith(".py"):
+            # 1. Root package fix: 'from backend.app' / 'import backend.app' / 'from backend' -> 'from app' / 'import app'
+            content = re.sub(r"\bfrom\s+backend\.app\b", "from app", content)
+            content = re.sub(r"\bimport\s+backend\.app\b", "import app", content)
+            content = re.sub(r"\bfrom\s+backend\b", "from app", content)
+
+            # 2. Fix Pydantic v1 'class Config:\n    orm_mode = True' -> 'model_config = ConfigDict(from_attributes=True)'
+            if "orm_mode = True" in content:
+                if "from pydantic import" in content and "ConfigDict" not in content:
+                    content = re.sub(r"from pydantic import ([^\n]+)", r"from pydantic import \1, ConfigDict", content)
+                content = re.sub(
+                    r"class\s+Config\s*:\s*\n\s*orm_mode\s*=\s*True",
+                    "model_config = ConfigDict(from_attributes=True)",
+                    content,
+                )
+
+            # 3. Fix multiple Base definitions in models if Base is already provided
+            if "backend/app/models/" in file_path and "Base = declarative_base()" in content:
+                content = re.sub(r"Base\s*=\s*declarative_base\(\)[^\n]*\n?", "", content)
+                if "from app.database.session import Base" not in content and "from app.database import Base" not in content:
+                    content = "from app.database.session import Base\n" + content
+
+            # 4. Fix server_default=datetime.now()
+            if "server_default=datetime.now" in content or "server_default=datetime.utcnow" in content:
+                content = re.sub(r"server_default\s*=\s*datetime\.(now|utcnow)\(\)[^,\)]*", "server_default=func.now()", content)
+                if "func" not in content:
+                    if "from sqlalchemy import" in content:
+                        content = re.sub(r"from sqlalchemy import ([^\n]+)", r"from sqlalchemy import \1, func", content)
+                    else:
+                        content = "from sqlalchemy import func\n" + content
+
+        elif file_path.endswith(".tsx") or file_path.endswith(".jsx") or file_path.endswith(".ts") or file_path.endswith(".js"):
+            # 1. Next.js 14 App Router: useRouter from 'next/router' throws an error in app directory!
+            content = re.sub(r"from\s+['\"]next/router['\"]", "from 'next/navigation'", content)
+
+            # 2. Add 'use client'; if hooks are used and directive is missing
+            if file_path.endswith(".tsx") or file_path.endswith(".jsx"):
+                hook_pattern = r"\b(useState|useEffect|useContext|useReducer|useCallback|useMemo|useRef|useRouter|usePathname|useSearchParams|useParams)\b"
+                if re.search(hook_pattern, content):
+                    first_line = content.strip().split("\n")[0].strip()
+                    if not (first_line.startswith('"use client"') or first_line.startswith("'use client'")):
+                        content = "'use client';\n\n" + content
+
+            # 3. Fix recursive / invalid fetch imports: 'import { fetch } from 'next/server';'
+            content = re.sub(r"import\s*\{[^}]*fetch[^}]*\}\s*from\s*['\"]next/server['\"];?\n?", "", content)
+
+        return content
+
     async def execute_task_code_generation(
         self,
         project_name: str,
         task: TaskResponse,
         architecture: SystemArchitecture,
     ) -> TaskCodeOutput:
-        """Route an individual task to its specialized developer agent."""
+        """Route an individual task to its specialized developer agent with full workspace context."""
         agent = self.AGENT_MAP.get(task.assigned_agent)
         if not agent:
             # Fallback or pass for non-developer agents (e.g. tester, reviewer)
@@ -51,10 +146,13 @@ class CodeGenerationOrchestrator:
                 files=[],
             )
 
+        workspace_context = self._build_workspace_context(project_name, task)
+
         return await agent.execute_task(
             project_name=project_name,
             task=task,
             architecture=architecture,
+            existing_code_context=workspace_context,
         )
 
     async def generate_project(
@@ -94,12 +192,15 @@ class CodeGenerationOrchestrator:
                     architecture=architecture,
                 )
 
-                # Write generated files safely into the workspace
+                # Write generated files safely into the workspace with post-processing sanitation
                 for file_entry in code_output.files:
+                    sanitized_content = self._sanitize_generated_file(
+                        file_entry.file_path, file_entry.content
+                    )
                     meta = workspace_service.write_file(
                         project_slug=project.name,
                         relative_path=file_entry.file_path,
-                        content=file_entry.content,
+                        content=sanitized_content,
                         overwrite=True,
                     )
                     # Persist metadata in PostgreSQL

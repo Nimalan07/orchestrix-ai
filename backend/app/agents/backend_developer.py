@@ -27,6 +27,7 @@ class BackendDeveloperAgent:
         project_name: str,
         task: TaskResponse,
         architecture: SystemArchitecture,
+        existing_code_context: Optional[str] = None,
     ) -> TaskCodeOutput:
         """Execute a backend engineering task and return structured source files."""
         logger.info(f"BackendDeveloperAgent executing task [{task.task_key}]: {task.title}")
@@ -38,6 +39,12 @@ class BackendDeveloperAgent:
             [e.model_dump() for e in architecture.data_entities], indent=2
         )
 
+        existing_section = (
+            f"Existing Project Code Context (Models, Schemas, Database):\n{existing_code_context}\n"
+            if existing_code_context
+            else ""
+        )
+
         prompt = BACKEND_DEVELOPER_USER_TEMPLATE.format(
             project_name=project_name,
             task_key=task.task_key,
@@ -45,6 +52,7 @@ class BackendDeveloperAgent:
             task_description=task.description,
             contracts_json=contracts_json,
             entities_json=entities_json,
+            existing_context_section=existing_section,
         )
 
         code_output = await self.llm_service.generate_structured(

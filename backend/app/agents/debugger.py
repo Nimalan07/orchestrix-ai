@@ -4,6 +4,7 @@ Analyzes test failure diagnostics, determines root causes, and generates code re
 """
 
 import logging
+import re
 from typing import Dict, List
 from app.services.llm_service import llm_service
 from app.schemas.testing import TestRunReport
@@ -49,11 +50,16 @@ class DebuggerAgent:
 
             fixes = []
             for item in parsed.get("files_to_fix", []):
+                content = item.get("replacement_content", "")
+                if item.get("file_path", "").endswith(".py"):
+                    content = re.sub(r"\bfrom\s+backend\.app\b", "from app", content)
+                    content = re.sub(r"\bimport\s+backend\.app\b", "import app", content)
+                    content = re.sub(r"\bfrom\s+backend\b", "from app", content)
                 fixes.append(
                     CodeFix(
                         file_path=item["file_path"],
                         explanation=item.get("explanation", "Autonomous bug repair"),
-                        replacement_content=item["replacement_content"],
+                        replacement_content=content,
                     )
                 )
 

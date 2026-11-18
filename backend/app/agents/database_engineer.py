@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class DatabaseEngineerAgent:
     """
     Autonomous Database Engineer Agent for Orchestrix.
-    Generates SQLAlchemy models, schemas, and database initialization code.
+    Generates SQLAlchemy 2.0 models, Pydantic v2 schemas, and database initialization code.
     """
 
     def __init__(self, service: Optional[LLMService] = None):
@@ -27,6 +27,7 @@ class DatabaseEngineerAgent:
         project_name: str,
         task: TaskResponse,
         architecture: SystemArchitecture,
+        existing_code_context: Optional[str] = None,
     ) -> TaskCodeOutput:
         """Execute a database engineering task and return structured source files."""
         logger.info(f"DatabaseEngineerAgent executing task [{task.task_key}]: {task.title}")
@@ -36,6 +37,12 @@ class DatabaseEngineerAgent:
         )
         security_guidelines_json = json.dumps(architecture.security_guidelines, indent=2)
 
+        existing_section = (
+            f"Existing Project Code Context:\n{existing_code_context}\n"
+            if existing_code_context
+            else ""
+        )
+
         prompt = DATABASE_ENGINEER_USER_TEMPLATE.format(
             project_name=project_name,
             task_key=task.task_key,
@@ -43,6 +50,7 @@ class DatabaseEngineerAgent:
             task_description=task.description,
             entities_json=entities_json,
             security_guidelines_json=security_guidelines_json,
+            existing_context_section=existing_section,
         )
 
         code_output = await self.llm_service.generate_structured(

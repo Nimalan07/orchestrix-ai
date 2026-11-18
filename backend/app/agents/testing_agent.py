@@ -11,6 +11,7 @@ from app.services.llm_service import llm_service
 from app.sandbox.runner import sandbox_runner
 from app.schemas.architecture import SystemArchitecture
 from app.schemas.testing import TestCaseResult, TestRunReport
+from app.services.workspace_service import workspace_service
 from app.prompts.testing_prompts import TESTING_AGENT_SYSTEM_PROMPT, TEST_GENERATION_USER_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,17 @@ class TestingAgent:
             [c.model_dump() for c in architecture.api_contracts], indent=2
         ) if architecture.api_contracts else "None explicitly listed."
 
+        snippets = []
+        for f in existing_files:
+            if "backend/app/api/" in f or "backend/app/main.py" in f:
+                try:
+                    content = workspace_service.read_file(project_name, f)
+                    short_content = "\n".join(content.splitlines()[:40])
+                    snippets.append(f"--- {f} ---\n{short_content}")
+                except Exception:
+                    pass
+        snippets_text = "Sample Discovered Route Definitions:\n" + "\n\n".join(snippets) if snippets else ""
+
         user_prompt = TEST_GENERATION_USER_PROMPT.format(
             project_name=project_name,
             architecture_pattern=architecture.architecture_pattern,
@@ -43,6 +55,7 @@ class TestingAgent:
             db_stack=architecture.tech_stack.database,
             api_contracts=contracts_summary,
             existing_files="\n".join(f"- {f}" for f in existing_files),
+            existing_code_snippets=snippets_text,
         )
 
         try:
@@ -52,7 +65,19 @@ class TestingAgent:
                 temperature=0.2,
             )
             if "test_files" in parsed and isinstance(parsed["test_files"], list):
-                return parsed["test_files"]
+                sanitized_test_files = []
+                for tf in parsed["test_files"]:
+                    if isinstance(tf, dict) and "content" in tf:
+                        c = tf["content"]
+                        c = re.sub(r"\bfrom\s+backend\.app\b", "from app", c)
+                        c = re.sub(r"\bimport\s+backend\.app\b", "import app", c)
+                        c = re.sub(r"\bfrom\s+backend\b", "from app", c)
+                        sanitized_test_files.append({
+                            "file_path": tf.get("file_path", "backend/tests/test_api.py"),
+                            "content": c,
+                        })
+                if sanitized_test_files:
+                    return sanitized_test_files
         except Exception as exc:
             logger.warning(f"LLM test generation failed or timed out: {exc}. Using deterministic test generator.")
 

@@ -40,6 +40,11 @@ class ScaffoldingGenerator:
         files["backend/pytest.ini"] = self._build_pytest_ini()
         files["backend/__init__.py"] = '"""Backend package."""\n'
         files["backend/app/__init__.py"] = '"""App package."""\n'
+        files["backend/app/database/__init__.py"] = 'from app.database.session import Base, engine, SessionLocal, get_db\n\n__all__ = ["Base", "engine", "SessionLocal", "get_db"]\n'
+        files["backend/app/models/__init__.py"] = '"""Models package."""\n'
+        files["backend/app/schemas/__init__.py"] = '"""Schemas package."""\n'
+        files["backend/app/api/__init__.py"] = '"""API package."""\n'
+        files["backend/app/services/__init__.py"] = '"""Services package."""\n'
         files["backend/tests/__init__.py"] = '"""Tests package."""\n'
 
         # 5. Backend Dockerfile
@@ -124,7 +129,16 @@ def get_db():
                 module_name = module_name[len("backend."):]
             if module_name.startswith("app.api."):
                 simple_name = module_name.split(".")[-1]
-                router_imports.append(f"try:\n    from app.api.{simple_name} import router as {simple_name}_router\n    app.include_router({simple_name}_router, prefix=\"/api/{simple_name}\", tags=[\"{simple_name.capitalize()}\"])\nexcept Exception:\n    pass")
+                router_imports.append(f"""try:
+    from app.api.{simple_name} import router as {simple_name}_router
+    r_prefix = getattr({simple_name}_router, "prefix", "")
+    has_api = r_prefix.startswith("/api") or any(getattr(route, "path", "").startswith("/api") for route in getattr({simple_name}_router, "routes", []))
+    if has_api:
+        app.include_router({simple_name}_router)
+    else:
+        app.include_router({simple_name}_router, prefix="/api")
+except Exception:
+    pass""")
 
         router_block = "\n".join(router_imports) if router_imports else "# No specific routers discovered yet"
 
