@@ -38,10 +38,11 @@ async def root():
 
 @app.get("/health")
 async def health():
+    is_groq = bool(settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip())
     return {
         "status": "healthy",
         "service": f"{settings.APP_NAME} API",
         "environment": settings.ENVIRONMENT,
-        "ai_provider": "ollama",
-        "model": settings.OLLAMA_MODEL
+        "ai_provider": "groq" if is_groq else "ollama",
+        "model": settings.GROQ_MODEL if is_groq else settings.OLLAMA_MODEL
     }

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     ENVIRONMENT: str = "development"
     DATABASE_URL: str = "postgresql+psycopg://postgres:indiawin@localhost:5432/orchestrix_db"
+
+    # GroqCloud Cloud LLM Integration (Optional)
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Local Ollama Integration
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5-coder:7b"
     FRONTEND_URL: str = "http://localhost:3000"
