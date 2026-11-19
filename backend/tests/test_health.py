@@ -18,3 +18,11 @@ def test_health_endpoint():
     data = response.json()
     assert data["status"] == "healthy"
     assert "Orchestrix API" in data["service"]
+
+
+def test_head_endpoints_for_uptime_monitors():
+    root_head = client.head("/")
+    assert root_head.status_code == 200
+
+    health_head = client.head("/health")
+    assert health_head.status_code == 200

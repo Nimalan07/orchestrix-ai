@@ -26,7 +26,7 @@ app.include_router(agent_router)
 app.include_router(execution_router)
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {
         "application": settings.APP_NAME,
@@ -36,7 +36,7 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     is_groq = bool(settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip())
     return {
