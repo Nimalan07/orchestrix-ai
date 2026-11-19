@@ -132,6 +132,16 @@ npm run dev
 ```
 Orchestrix Platform will be live at: `http://localhost:3000`
 
+### 3. One-Command Docker Deployment (Production)
+To deploy the entire Orchestrix platform (PostgreSQL, FastAPI Backend, and Next.js Frontend) in unified containers:
+```bash
+# Clone and launch all services
+docker compose up --build -d
+```
+- **Dashboard**: `http://localhost:3000`
+- **Swagger API Docs**: `http://localhost:8000/docs`
+- **Database**: PostgreSQL on port `5432` (persistent Docker volume `pgdata`)
+
 ---
 
 ## 🧪 Automated Test Suite
